@@ -1,0 +1,182 @@
+---
+title: "midterm.rmd"
+output: html_document
+date: "2025-03-24" 
+---
+
+```{r}
+# Install and load the necessary package (for Excel files, but not required for CSV)
+# install.packages("readxl")  # Uncomment this line if you're dealing with Excel files
+# library(readxl)  # Uncomment this line if you're dealing with Excel files
+
+# Set the working directory to where the CSV file is located (optional)
+# This command sets the folder where R will look for my files:
+setwd("C:/Users/prash/Downloads/")  # Update this path to your directory if needed
+
+# Read the CSV file
+# This can loads the dataset from the CSV file into R.
+my_data <- read.csv("data science missdata.csv")  # Ensure file name is correct
+
+# View all rows of the dataset (This will print the entire dataset)
+#This prints all the data, which helps us quickly scan if everything loaded correctly.
+print(my_data)  # Display the entire dataset with all 106 rows
+# Load necessary libraries
+library(dplyr)      # For data manipulation & Filtering, summarizing and manipulating data.
+library(ggplot2)    # For visualizations & creating plots and graphs.
+library(corrplot)   # For correlation matrix & visualizing correlation matrices.
+library(GGally)     # For pairwise scatter plot and used for creating pairwise scatter plot matrices.
+# These are like "extra tools" that help R perform tasks like organizing data and making charts in the output.
+# Ensure that you have dplyr installed
+# install.packages("dplyr")  # Uncomment if you haven't installed it
+
+# Ensure ggplot2, corrplot, and GGally are installed
+# install.packages("ggplot2")
+# install.packages("corrplot")
+# install.packages("GGally")
+
+# Your existing data preprocessing steps here...
+
+
+# Inspect the dataset structure
+# This command shows us what kind of data each column contains (numbers, text, etc in your data).
+str(my_data)   # Displays structure of the dataset
+head(my_data)  # Shows first few rows
+# Displays the first few rows so we can quickly see what the data looks like.
+
+# Identify missing values
+# Finds all the missing values & Counts how many missing values are in each column.
+missing_values <- colSums(is.na(my_data))  # Count missing values per column
+print(missing_values)
+
+# Handling missing values
+# Drop columns with too many missing values (more than 50% missing)
+# This line shows us If more than half the rows in a column are missing, remove that column.
+threshold <- 0.5 * nrow(my_data)
+my_data <- my_data[, colSums(is.na(my_data)) < threshold]
+
+# Impute missing values
+# For numerical columns: Replace missing values with the median
+# This line shows us Finds all the numeric columns (numbers)    Replaces missing values in those columns with the median (middle value).
+num_cols <- sapply(my_data, is.numeric)
+my_data[num_cols] <- lapply(my_data[num_cols], function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
+
+# For categorical columns: Replace missing values with the mode & get unique non-NA values frequent values.
+fill_mode <- function(x) {
+  unique_x <- unique(x[!is.na(x)])
+  mode_val <- unique_x[which.max(tabulate(match(x, unique_x)))]
+  return(ifelse(is.na(x), mode_val, x))
+}
+# apply mode replacement to the categorical columns
+cat_cols <- sapply(my_data, is.factor)
+my_data[cat_cols] <- lapply(my_data[cat_cols], fill_mode)
+
+# Check for duplicates rows from this line.
+duplicates <- my_data[duplicated(my_data), ]
+print(duplicates)  # Display duplicate rows if any
+
+# Remove duplicates rows from this line.
+my_data <- my_data[!duplicated(my_data), ]
+
+# Identify and handle outliers using IQR method and replace outliers with NA & identify numeric columns and apply outlier removal to numerical columns.
+remove_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE)
+  Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  IQR_value <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR_value
+  upper_bound <- Q3 + 1.5 * IQR_value
+  x[x < lower_bound | x > upper_bound] <- NA
+  return(x)
+}
+
+# Apply outlier removal to numerical columns with median values.
+my_data[num_cols] <- lapply(my_data[num_cols], remove_outliers)
+
+# Impute outliers with median (same as missing values handling)
+my_data[num_cols] <- lapply(my_data[num_cols], function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
+
+# Final dataset summary
+# This line shows us command gives a quick overview of the dataset & It shows minimum, maximum, median, mean, and quartiles for numeric columns.
+summary(my_data)
+
+# Save the cleaned dataset (optional)
+# This line shows us that "cleaned_data.csv in the working directory & row.names = FALSE removes unnecessary row numbers #print("Data preprocessing complete!") just confirms that everything is done.
+write.csv(my_data, "cleaned_data.csv", row.names = FALSE)
+
+# Print success message
+# This line tells that "data preprocessing is complete"
+print("Data preprocessing complete!")
+
+# ==============================================
+# 1. SUMMARY STATISTICS
+# ==============================================
+# this code shows us that ExtRACTED ONLY NUMERIC Columns from the dataset calculates through median & mean and min max.
+summary_stats <- my_data[, num_cols] %>% summarise_all(list(
+  mean = mean, median = median, sd = sd, 
+  min = min, max = max, range = ~ max(.) - min(.),
+  Q1 = ~ quantile(., 0.25), Q3 = ~ quantile(., 0.75)
+))
+print(summary_stats)
+
+# ==============================================
+# 2. CORRELATION ANALYSIS
+# ==============================================
+
+library(corrplot)
+# This code shows us Calculates the correlation between all numeric columns & ingnore missing valuews abd cretae a heatmap in the realtionships.
+# Compute correlation matrix
+correlation_matrix <- cor(my_data[, num_cols], use = "complete.obs")
+
+# Plot correlation heatmap
+corrplot(correlation_matrix, method = "color", type = "upper", 
+         tl.cex = 0.8, tl.col = "black", title = "Correlation Heatmap")
+
+# ==============================================
+# 3. DATA VISUALIZATION
+# ==============================================
+
+library(ggplot2)
+library(GGally)
+
+# Histograms for numerical variables
+# The code shows us Loops through all numeric columns and plots a histogram & Divides data into bins and shows frequency & sets bar clours to identify the data.
+for (col in names(my_data[, num_cols])) {
+  print(ggplot(my_data, aes_string(x = col)) +
+          geom_histogram(bins = 30, fill = "blue", color = "black", alpha = 0.7) +
+          labs(title = paste("Histogram of", col), x = col, y = "Frequency") +
+          theme_minimal())
+}
+# This code shows us Loops through all numeric columns and creates a boxplot & Draws a boxplot.
+
+# Boxplots for numerical variables
+for (col in names(my_data[, num_cols])) {
+  print(ggplot(my_data, aes_string(y = col)) +
+          geom_boxplot(fill = "blue", color = "black") +
+          labs(title = paste("Boxplot of", col), y = col) +
+          theme_minimal())
+}
+
+# Pairwise scatter plot matrix (correlation visualization)
+# Creates scatter plots for all numeric variables.
+ggpairs(my_data[, num_cols])
+
+# Bar charts for categorical variables
+# this code shows us Finds categorical (non-numeric) columns & Creates a bar chart showing counts of different categories.
+cat_cols <- sapply(my_data, function(x) is.character(x) | is.factor(x))
+for (col in names(my_data[, cat_cols])) {
+  print(ggplot(my_data, aes_string(x = col)) +
+          geom_bar(fill = "blue", color = "black", alpha = 0.7) +
+          labs(title = paste("Bar Chart of", col), x = col, y = "Frequency") +
+          theme_minimal())
+}
+# this code shows us hows the first six rows of the dataset& str(my_data) → Displays column names, data types, and first few values.Helps verify that the data looks as expected before further processing.
+
+# ==============================================
+# 4. FINAL CLEANED DATA CHECK
+# ==============================================
+
+head(my_data)
+str(my_data)
+
+# Print success message
+print("Data analysis and visualization complete!")
+
